@@ -2,7 +2,7 @@ const std = @import("std");
 const gxhash = @import("src/core.zig");
 
 comptime {
-    asm (@embedFile("x86_64/avx.s"));
+    asm (@embedFile("src/x86_64/avx.s"));
 }
 
 const State = @Vector(16, i8);

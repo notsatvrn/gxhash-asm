@@ -11,6 +11,7 @@ const aes = plat: {
         const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
 
         if (has_vaes and @import("options").hybrid) break :plat @import("aes/x86_vaes.zig");
+        if (has_avx) break :plat @import("aes/x86_avx.zig");
         if (has_aes) break :plat @import("aes/x86.zig");
     } else if (builtin.cpu.arch.isARM()) {
         const target = switch (builtin.cpu.arch) {
@@ -31,12 +32,41 @@ pub const software_aes = @hasDecl(aes, "software");
 pub const aesEncrypt = aes.encrypt;
 pub const aesEncryptLast = aes.encryptLast;
 
+const has_asm = @hasDecl(aes, "assembly");
+const assembly = if (has_asm)
+    aes.assembly
+else
+    \\hash_fast:
+    \\compress_all:
+    ;
+
+comptime {
+    asm (assembly);
+}
+
+extern fn hash_fast(ptr: u64, len: u64, seed: u64) i8x16;
+extern fn compress_all(ptr: u64, len: u64) i8x16;
+
+inline fn hashFast(input: []const u8, seed: u64) State {
+    return .{ .i8x16 = hash_fast(@intFromPtr(input.ptr), @intCast(input.len), seed) };
+}
+inline fn caFast(input: []const u8) State {
+    return .{ .i8x16 = compress_all(@intFromPtr(input.ptr), @intCast(input.len)) };
+}
+
+pub inline fn hash(input: []const u8, seed: u64) State {
+    return if (comptime has_asm) hashFast(input, seed) else finalize(aesEncrypt(caSoft(input), seed));
+}
+pub inline fn compressAll(input: []const u8) State {
+    return if (comptime has_asm) caFast(input) else caSoft(input);
+}
+
 // state (represented as a packed union for easy type conversion)
 
-const i8x16 = @Vector(16, i8);
-const i32x4 = @Vector(4, i32);
-const u32x4 = @Vector(4, u32);
-const u64x2 = @Vector(2, u64);
+pub const i8x16 = @Vector(16, i8);
+pub const i32x4 = @Vector(4, i32);
+pub const u32x4 = @Vector(4, u32);
+pub const u64x2 = @Vector(2, u64);
 
 pub const State = packed union {
     const Self = @This();
@@ -94,11 +124,7 @@ pub const keys: [3]State = .{
     .{ .u32x4 = .{ 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B } },
 };
 
-export fn compressAllExtern(pointer: u64, len: u64) State {
-    return compressAll(@as([*]const u8, @ptrFromInt(pointer))[0..len]);
-}
-
-pub fn compressAll(input: []const u8) State {
+pub fn caSoft(input: []const u8) State {
     if (input.len == 0) return State.empty;
 
     var ptr: [*]const i8 = @ptrCast(input.ptr);
@@ -210,8 +236,8 @@ inline fn compress8Standard(pointer: [*]const i8, end: usize, hash_vector: State
 // finalize
 
 pub inline fn finalize(data: State) State {
-    var hash = aesEncrypt(data, keys[0]);
-    hash = aesEncrypt(hash, keys[1]);
-    hash = aesEncryptLast(hash, keys[2]);
-    return hash;
+    var out = aesEncrypt(data, keys[0]);
+    out = aesEncrypt(out, keys[1]);
+    out = aesEncryptLast(out, keys[2]);
+    return out;
 }

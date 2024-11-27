@@ -1,6 +1,8 @@
 const core = @import("../core.zig");
 const State = core.State;
 
+pub const assembly = @embedFile("../x86_64/sse.s");
+
 pub inline fn encrypt(data: State, keys: State) State {
     var out = data;
     asm (

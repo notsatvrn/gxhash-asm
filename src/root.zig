@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core.zig");
+pub const core = @import("core.zig");
 const options = @import("options");
 
 pub const use_wyhash = core.software_aes and options.fast_fallback;
@@ -8,23 +8,19 @@ pub const State = core.State;
 // quick hashing functions
 
 pub inline fn hash32(input: []const u8, seed: u64) u32 {
-    return hash(input, State.init(seed)).u32x4[0];
+    return hash(input, seed).u32x4[0];
 }
 
 pub inline fn hash64(input: []const u8, seed: u64) u64 {
-    return hash(input, State.init(seed)).u64x2[0];
+    return hash(input, seed).u64x2[0];
 }
 
 pub inline fn hash128(input: []const u8, seed: u64) u128 {
-    return hash(input, State.init(seed)).u128;
+    return hash(input, seed).u128;
 }
 
-fn hash(input: []const u8, seed: core.State) core.State {
-    if (use_wyhash) {
-        return std.hash.Wyhash.hash(seed.u64x2[0], input);
-    } else {
-        return core.finalize(core.aesEncrypt(core.compressAll(input), seed));
-    }
+fn hash(input: []const u8, seed: u64) core.State {
+    return if (use_wyhash) std.hash.Wyhash.hash(seed, input) else core.hash(input, seed);
 }
 
 // seeded hasher struct

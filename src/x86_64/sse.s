@@ -12,6 +12,28 @@ key2: .long 0x03FCE279, 0xCB6B2E9B, 0xB361DC58, 0x39132BD9
 key3: .long 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B
 
 .text
+.global hash_fast
+.type hash_fast, @function
+.global finalize
+.type finalize, @function
+
+# quickly hash bytes
+# rdi = address, rsi = length, rdx = seed | output in xmm0
+hash_fast:
+  # compress all
+  call compress_all
+  # create seed in xmm1
+  movq xmm1, rdx
+  movlhps xmm1, xmm1
+  # encrypt
+  aesenc xmm0, xmm1
+finalize:
+  # finalize
+  aesenc xmm0, [rip + key1]
+  aesenc xmm0, [rip + key2]
+  aesenclast xmm0, [rip + key3]
+  ret
+
 .global compress_all
 .type compress_all, @function
 
@@ -52,7 +74,8 @@ over_16:
   movdqa xmm0, xmm1
   pcmpgtb xmm0, [rip + indices]
   # load vector, apply mask, add len
-  pand xmm0, [rdi]
+  movdqu xmm2, [rdi]
+  pand xmm0, xmm2
   paddb xmm0, xmm1
   add rdi, rax
   
@@ -136,7 +159,7 @@ compress8prep:
 
   # save xmm1 (xmm0 overwritten, both for tmp registers)
   sub rsp, 16
-  movdqa [rsp], xmm1
+  movdqu [rsp], xmm1
 
   # lanes
   movdqa xmm8, xmm0
@@ -190,7 +213,7 @@ post_compress8:
   pshufd xmm0, xmm0, 0x00
 
   # load xmm1
-  movdqa xmm1, [rsp]
+  movdqu xmm1, [rsp]
   add rsp, 16
 
   # add len to lanes
@@ -198,8 +221,8 @@ post_compress8:
   paddb xmm9, xmm0
 
   # merge lanes
+  aesenc xmm8, xmm9
   movdqa xmm0, xmm8
-  aesenc xmm0, xmm9
 
   /*
   pxor xmm5, xmm5
@@ -225,23 +248,24 @@ ret0:
   ret
 
 # partially load a vector (SAFE | copies if all 16 bytes don't fit into one page)
-# rdi = address, rsi = length | uses xmm0-1, output in xmm0
+# rdi = address, rsi = length | uses xmm0-2, output in xmm0
 get_partial:
   # splat len into xmm0
   movd xmm0, esi
   pshufb xmm0, [rip + splat]
   # check if all 16 bytes are on the same page
   mov ax, di
-  not ax
-  test ax, 4080 # 4096KiB - 16 (does the 16th byte exceed page boundary?)
+  and ax, 0xFFF
+  cmp ax, (0x1000 - 128)
   # jump to safe version if not
-  je get_partial_safe
+  jae get_partial_safe
 get_partial_unsafe:
   # create indices mask in xmm0
   movdqa xmm1, xmm0
   pcmpgtb xmm0, [rip + indices]
   # load vector w/ mask, add len
-  pand xmm0, [rdi] # may SIGSEGV!
+  movdqu xmm2, [rdi] # may SIGSEGV!
+  pand xmm0, xmm2
   paddb xmm0, xmm1
   # cleanup
   ret
