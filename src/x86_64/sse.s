@@ -47,7 +47,7 @@ compress_all:
   ja over_16
 
   # fast path for len == 16
-  
+
   movdqu xmm0, [rdi]
   # splat len into xmm1
   movd xmm1, esi
@@ -165,7 +165,7 @@ compress8prep:
 
   # lanes
   movdqa xmm8, xmm0
-  movdqa xmm9, xmm0 o
+  movdqa xmm9, xmm0
 
   # move address into RAX (smaller opcode)
   mov rax, rdi
