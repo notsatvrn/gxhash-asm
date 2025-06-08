@@ -2,8 +2,6 @@
 
 .rodata
 .p2align 4
-# splat helper
-splat: .zero 16
 # constant for get_partial_unsafe indices
 indices: .byte 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 # keys
@@ -39,19 +37,21 @@ finalize:
 
 # compress all bytes at address rdi with length rsi into a 128-bit vector
 compress_all:
-  # some hot paths
+  # fast path for len == 0
   mov rax, rsi
   test rax, rax
   je ret0
+  # some other hot paths
   cmp rax, 16
   jb get_partial
   ja over_16
-  
+
   # fast path for len == 16
   
   movdqu xmm0, [rdi]
   # splat len into xmm1
   movd xmm1, esi
+  pxor xmm2, xmm2
   pshufb xmm1, xmm2
   # add len
   paddb xmm0, xmm1
@@ -68,8 +68,9 @@ over_16:
   # keep in sync with below implementation!
   
   # splat len
-  movd xmm1, rax
-  pshufb xmm1, [rip + splat]
+  movd xmm1, eax
+  pxor xmm2, xmm2
+  pshufb xmm1, xmm2
   # create indices mask in xmm0
   movdqa xmm0, xmm1
   pcmpgtb xmm0, [rip + indices]
@@ -154,8 +155,9 @@ post_unrollable:
   # compress in blocks
 
 compress8prep:
-  # diasmbiguation vectors (xmm5 already zero)
+  # diasmbiguation vectors
   pxor xmm2, xmm2
+  pxor xmm5, xmm5
 
   # save xmm1 (xmm0 overwritten, both for tmp registers)
   sub rsp, 16
@@ -163,7 +165,7 @@ compress8prep:
 
   # lanes
   movdqa xmm8, xmm0
-  movdqa xmm9, xmm0
+  movdqa xmm9, xmm0 o
 
   # move address into RAX (smaller opcode)
   mov rax, rdi
@@ -207,8 +209,7 @@ compress8:
   cmp rax, rbx
   jb compress8
 post_compress8:
-  # splat len on stack and load into xmm0
-  and esi, 0xFFFFFFFF
+  # splat len in xmm0
   movd xmm0, esi
   pshufd xmm0, xmm0, 0x00
 
@@ -223,23 +224,10 @@ post_compress8:
   # merge lanes
   aesenc xmm8, xmm9
   movdqa xmm0, xmm8
-
-  /*
-  pxor xmm5, xmm5
-  pxor xmm6, xmm6
-  pxor xmm7, xmm7
-  */
 final:
   aesenc xmm1, xmm3
   aesenc xmm1, xmm4
   aesenclast xmm0, xmm1
-  # cleanup
-  /*
-  pxor xmm1, xmm1
-  pxor xmm2, xmm2
-  pxor xmm3, xmm3
-  pxor xmm4, xmm4
-  */
   pop rbx
 return:
   ret
@@ -250,13 +238,14 @@ ret0:
 # partially load a vector (SAFE | copies if all 16 bytes don't fit into one page)
 # rdi = address, rsi = length | uses xmm0-2, output in xmm0
 get_partial:
+  pxor xmm2, xmm2
   # splat len into xmm0
   movd xmm0, esi
-  pshufb xmm0, [rip + splat]
+  pshufb xmm0, xmm2
   # check if all 16 bytes are on the same page
   mov ax, di
   and ax, 0xFFF
-  cmp ax, (0x1000 - 128)
+  cmp ax, (0x1000 - 16)
   # jump to safe version if not
   jae get_partial_safe
 get_partial_unsafe:

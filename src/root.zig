@@ -2,37 +2,36 @@ const std = @import("std");
 pub const core = @import("core.zig");
 const options = @import("options");
 
-pub const use_wyhash = core.software_aes and options.fast_fallback;
-pub const State = core.State;
+pub const fallback = core.software_aes and options.fast_fallback;
 
 // quick hashing functions
 
 pub inline fn hash32(input: []const u8, seed: u64) u32 {
-    return hash(input, seed).u32x4[0];
+    return @truncate(hash(input, seed));
 }
 
 pub inline fn hash64(input: []const u8, seed: u64) u64 {
-    return hash(input, seed).u64x2[0];
+    return @truncate(hash(input, seed));
 }
 
 pub inline fn hash128(input: []const u8, seed: u64) u128 {
-    return hash(input, seed).u128;
+    return hash(input, seed);
 }
 
-fn hash(input: []const u8, seed: u64) core.State {
-    return if (use_wyhash) std.hash.Wyhash.hash(seed, input) else core.hash(input, seed);
+fn hash(input: []const u8, seed: u64) u128 {
+    return if (fallback) std.hash.RapidHash.hash(seed, input) else core.hash(input, seed);
 }
 
 // seeded hasher struct
-// if fast fallback is used it will just be a wrapper around Wyhash
+// if fast fallback is used it will just be a wrapper around RapidHash
 
-pub const Hasher = if (use_wyhash) struct {
+pub const Hasher = if (fallback) struct {
     const Self = @This();
 
-    state: std.hash.Wyhash,
+    state: std.hash.RapidHash,
 
     pub inline fn init(seed: u64) Self {
-        return .{ .state = std.hash.Wyhash.init(seed) };
+        return .{ .state = std.hash.RapidHash.init(seed) };
     }
 
     pub inline fn update(self: *Self, input: []const u8) void {
@@ -54,10 +53,11 @@ pub const Hasher = if (use_wyhash) struct {
 } else struct {
     const Self = @This();
 
-    state: State,
+    state: core.i8x16,
 
     pub inline fn init(seed: u64) Self {
-        return .{ .state = State.init(seed) };
+        const seed_vec: core.u64x2 = @splat(seed);
+        return .{ .state = @bitCast(seed_vec) };
     }
 
     pub fn update(self: *Self, input: []const u8) void {
@@ -65,15 +65,15 @@ pub const Hasher = if (use_wyhash) struct {
     }
 
     pub fn final32(self: *Self) u32 {
-        return core.finalize(self.state).u32x4[0];
+        return @truncate(core.finalize(self.state));
     }
 
     pub fn final(self: *Self) u64 {
-        return core.finalize(self.state).u64x2[0];
+        return @truncate(core.finalize(self.state));
     }
 
     pub fn final128(self: *Self) u128 {
-        return core.finalize(self.state).u128;
+        return core.finalize(self.state);
     }
 };
 

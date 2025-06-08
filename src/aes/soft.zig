@@ -5,60 +5,59 @@
 const std = @import("std");
 
 const core = @import("../core.zig");
-const State = core.State;
+const i8x16 = core.i8x16;
+const u8x16 = core.u8x16;
+const u32x4 = core.u32x4;
 
 const software = true;
 
-pub inline fn encrypt(data: State, keys: State) State {
+pub inline fn encrypt(data: i8x16, keys: i8x16) i8x16 {
     @prefetch(&table, .{});
 
-    const bytes = data.u8x16;
+    const bytes: u8x16 = @bitCast(data);
 
     const t0 = table[0];
     const t1 = table[1];
     const t2 = table[2];
     const t3 = table[3];
 
-    const s0 = State{ .u32x4 = .{ t0[bytes[0]], t0[bytes[4]], t0[bytes[8]], t0[bytes[12]] } };
-    const s1 = State{ .u32x4 = .{ t1[bytes[5]], t1[bytes[9]], t1[bytes[13]], t1[bytes[1]] } };
-    const s2 = State{ .u32x4 = .{ t2[bytes[10]], t2[bytes[14]], t2[bytes[2]], t2[bytes[6]] } };
-    const s3 = State{ .u32x4 = .{ t3[bytes[15]], t3[bytes[3]], t3[bytes[7]], t3[bytes[11]] } };
+    const s0: i8x16 = @bitCast(u32x4{ t0[bytes[0]], t0[bytes[4]], t0[bytes[8]], t0[bytes[12]] });
+    const s1: i8x16 = @bitCast(u32x4{ t1[bytes[5]], t1[bytes[9]], t1[bytes[13]], t1[bytes[1]] });
+    const s2: i8x16 = @bitCast(u32x4{ t2[bytes[10]], t2[bytes[14]], t2[bytes[2]], t2[bytes[6]] });
+    const s3: i8x16 = @bitCast(u32x4{ t3[bytes[15]], t3[bytes[3]], t3[bytes[7]], t3[bytes[11]] });
 
-    return .{ .u128 = (s0.u128 ^ s1.u128 ^ s2.u128 ^ s3.u128) ^ keys.u128 };
+    return (s0 ^ s1 ^ s2 ^ s3) ^ keys;
 }
 
-pub inline fn encryptLast(data: State, keys: State) State {
+pub inline fn encryptLast(data: i8x16, keys: i8x16) i8x16 {
     @prefetch(&sbox, .{});
 
-    const bytes = data.u8x16;
+    const bytes: u8x16 = @bitCast(data);
 
     // Last round uses s-box directly and XORs to produce output.
-    var out = State{
-        .u8x16 = .{
-            sbox[bytes[0]],
-            sbox[bytes[5]],
-            sbox[bytes[10]],
-            sbox[bytes[15]],
+    const out = u8x16{
+        sbox[bytes[0]],
+        sbox[bytes[5]],
+        sbox[bytes[10]],
+        sbox[bytes[15]],
 
-            sbox[bytes[4]],
-            sbox[bytes[9]],
-            sbox[bytes[14]],
-            sbox[bytes[3]],
+        sbox[bytes[4]],
+        sbox[bytes[9]],
+        sbox[bytes[14]],
+        sbox[bytes[3]],
 
-            sbox[bytes[8]],
-            sbox[bytes[13]],
-            sbox[bytes[2]],
-            sbox[bytes[7]],
+        sbox[bytes[8]],
+        sbox[bytes[13]],
+        sbox[bytes[2]],
+        sbox[bytes[7]],
 
-            sbox[bytes[12]],
-            sbox[bytes[1]],
-            sbox[bytes[6]],
-            sbox[bytes[11]],
-        },
+        sbox[bytes[12]],
+        sbox[bytes[1]],
+        sbox[bytes[6]],
+        sbox[bytes[11]],
     };
 
-    out.u128 ^= keys.u128;
-    return out;
+    return @as(i8x16, @bitCast(out)) ^ keys;
 }
 
 // constants

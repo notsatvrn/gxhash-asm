@@ -1,9 +1,9 @@
 const core = @import("../core.zig");
-const State = core.State;
+const i8x16 = core.i8x16;
 
 pub const assembly = @embedFile("../x86_64/sse.s");
 
-pub inline fn encrypt(data: State, keys: State) State {
+pub inline fn encrypt(data: i8x16, keys: i8x16) i8x16 {
     var out = data;
     asm (
         \\ aesenc %[k], %[out]
@@ -13,7 +13,7 @@ pub inline fn encrypt(data: State, keys: State) State {
     return out;
 }
 
-pub inline fn encryptLast(data: State, keys: State) State {
+pub inline fn encryptLast(data: i8x16, keys: i8x16) i8x16 {
     var out = data;
     asm (
         \\ aesenclast %[k], %[out]

@@ -56,7 +56,7 @@ test "hash of zero is not zero" {
 }
 
 test "stability" {
-    if (gxhash.use_wyhash) return error.SkipZigTest;
+    if (gxhash.fallback) return error.SkipZigTest;
 
     try std.testing.expectEqual(2533353535, gxhash.hash32(&[_]u8{}, 0));
     try std.testing.expectEqual(4243413987, gxhash.hash32(&[_]u8{0}, 0));

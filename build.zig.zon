@@ -1,13 +1,8 @@
 .{
-    .name = "zig-gxhash",
+    .name = .gxhash,
     .version = "0.0.0",
-    .dependencies = .{
-        .cpuid = .{
-            .url = "git+https://codeberg.org/zig-multimedia/cpuid#cc78ddcf965f5da4c7e508cab8d6aba907b7d4ed",
-            .hash = "1220c1d6abc3d6df0f5810bf87e39c20d3772ba7d9c7bcfd04952b935c7b9712172c",
-            .lazy = true,
-        },
-    },
+    .fingerprint = 0x9d6d88eb5d852321,
+    .dependencies = .{},
     .paths = .{
         "build.zig",
         "build.zig.zon",
