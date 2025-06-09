@@ -7,7 +7,7 @@ pub const i8x16 = @Vector(16, i8);
 pub const u8x16 = @Vector(16, u8);
 pub const u32x4 = @Vector(4, u32);
 
-const software = true;
+pub const software = true;
 
 pub inline fn encrypt(data: i8x16, keys: i8x16) i8x16 {
     @prefetch(&table, .{});
