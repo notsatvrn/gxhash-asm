@@ -4,10 +4,10 @@ const options = @import("options");
 
 pub const fallback = core.software_aes and options.fallback;
 
-pub inline fn hash(input: []const u8, seed: u64) u64 {
+pub inline fn hash(seed: u64, input: []const u8) u64 {
     return @truncate(hash128(input, seed));
 }
 
-pub fn hash128(input: []const u8, seed: u64) u128 {
+pub fn hash128(seed: u64, input: []const u8) u128 {
     return if (fallback) std.hash.RapidHash.hash(seed, input) else core.hash(input, seed);
 }

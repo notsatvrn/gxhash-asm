@@ -5,8 +5,8 @@ pub fn build(b: *std.Build) void {
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const fallback = b.option(bool, "gxhash_fallback", "Use RapidHash for better performance when hardware AES is not available") orelse false;
-    const hybrid = b.option(bool, "gxhash_hybrid", "Use V-AES to compress large inputs on x86 when available") orelse true;
+    const fallback = b.option(bool, "fast_fallback", "Use RapidHash for better performance when hardware AES is not available") orelse false;
+    const hybrid = b.option(bool, "allow_hybrid", "Use V-AES to compress large inputs on x86 when available") orelse true;
 
     // MODULE
 
