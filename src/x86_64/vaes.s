@@ -172,6 +172,8 @@ compress8:
   movdqu ymm6, [rax + 32]
   movdqu ymm7, [rax + 64]
   movdqu ymm8, [rax + 96]
+  # prefetch the next chunk
+  prefetcht0 [rax + 128]
   # compress
   aesenc ymm5, ymm6
   aesenc ymm5, ymm7
@@ -180,7 +182,7 @@ compress8:
   paddb ymm2, ymm3
   # encrypt tmp registers using that vector as keys
   aesenc ymm5, ymm2
-  # last encryption with lanes as keys
+  # last encryption with lane as keys
   vaesenclast ymm0, ymm5, ymm0
   # loop
   add rax, 128

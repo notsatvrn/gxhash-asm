@@ -177,6 +177,8 @@ compress8:
   movdqu xmm11, [rax + 80]
   movdqu xmm12, [rax + 96]
   movdqu xmm13, [rax + 112]
+  # prefetch the next chunk
+  prefetcht0 [rax + 128]
   # compress
   aesenc xmm0, xmm6
   aesenc xmm14, xmm7

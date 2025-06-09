@@ -5,14 +5,14 @@ pub fn build(b: *std.Build) void {
 
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const fast_fallback = b.option(bool, "gxhash_fast_fallback", "Use Wyhash when hardware AES is not available") orelse false;
-    //const hybrid = b.option(bool, "gxhash_hybrid", "Use V-AES to compress large inputs on x86 when available") orelse true;
+    const fallback = b.option(bool, "gxhash_fallback", "Use RapidHash for better performance when hardware AES is not available") orelse false;
+    const hybrid = b.option(bool, "gxhash_hybrid", "Use V-AES to compress large inputs on x86 when available") orelse true;
 
     // MODULE
 
     const options = b.addOptions();
-    options.addOption(bool, "fast_fallback", fast_fallback);
-    //options.addOption(bool, "hybrid", hybrid);
+    options.addOption(bool, "fallback", fallback);
+    options.addOption(bool, "hybrid", hybrid);
     const options_module = options.createModule();
     const gxhash = b.addModule("gxhash", .{
         .root_source_file = b.path("src/root.zig"),

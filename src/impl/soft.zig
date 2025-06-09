@@ -1,13 +1,11 @@
-// Extracted from the standard library software AES implementation and optimized.
-// !!! VERY SLOW !!!
-// If you don't need stable hashes, consider using a different hashing algo on platforms other than x86 and ARM.
+// Extracted from the standard library and optimized. Provides hash stability when hardware AES isn't available.
+// !!! VERY SLOW !!! If you don't need stable hashes, please enable the fallback option.
 
-const std = @import("std");
+const math = @import("std").math;
 
-const core = @import("../core.zig");
-const i8x16 = core.i8x16;
-const u8x16 = core.u8x16;
-const u32x4 = core.u32x4;
+pub const i8x16 = @Vector(16, i8);
+pub const u8x16 = @Vector(16, u8);
+pub const u32x4 = @Vector(4, u32);
 
 const software = true;
 
@@ -94,10 +92,10 @@ fn generateSbox() [256]u8 {
         q = mul(q, 0xf6); // divide by 3
 
         var value: u8 = q ^ 0x63;
-        value ^= std.math.rotl(u8, q, 1);
-        value ^= std.math.rotl(u8, q, 2);
-        value ^= std.math.rotl(u8, q, 3);
-        value ^= std.math.rotl(u8, q, 4);
+        value ^= math.rotl(u8, q, 1);
+        value ^= math.rotl(u8, q, 2);
+        value ^= math.rotl(u8, q, 3);
+        value ^= math.rotl(u8, q, 4);
 
         out[p] = value;
     }
@@ -112,14 +110,14 @@ fn generateTable() [4][256]u32 {
     var out: [4][256]u32 = undefined;
 
     for (generateSbox(), 0..) |value, index| {
-        out[0][index] = std.math.shl(u32, mul(value, 0x3), 24);
-        out[0][index] |= std.math.shl(u32, mul(value, 0x1), 16);
-        out[0][index] |= std.math.shl(u32, mul(value, 0x1), 8);
+        out[0][index] = math.shl(u32, mul(value, 0x3), 24);
+        out[0][index] |= math.shl(u32, mul(value, 0x1), 16);
+        out[0][index] |= math.shl(u32, mul(value, 0x1), 8);
         out[0][index] |= mul(value, 0x2);
 
-        out[1][index] = std.math.rotl(u32, out[0][index], 8);
-        out[2][index] = std.math.rotl(u32, out[0][index], 16);
-        out[3][index] = std.math.rotl(u32, out[0][index], 24);
+        out[1][index] = math.rotl(u32, out[0][index], 8);
+        out[2][index] = math.rotl(u32, out[0][index], 16);
+        out[3][index] = math.rotl(u32, out[0][index], 24);
     }
 
     return out;

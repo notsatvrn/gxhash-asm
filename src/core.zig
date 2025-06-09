@@ -9,27 +9,27 @@ const aes = plat: {
         const has_avx = has_aes and std.Target.x86.featureSetHas(builtin.cpu.features, .avx);
         const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
 
-        if (has_vaes and @import("options").hybrid) break :plat @import("aes/x86_vaes.zig");
-        if (has_avx) break :plat @import("aes/x86_avx.zig");
-        if (has_aes) break :plat @import("aes/x86.zig");
+        if (has_vaes and @import("options").hybrid) break :plat @import("impl/x86_vaes.zig");
+        if (has_avx) break :plat @import("impl/x86_avx.zig");
+        if (has_aes) break :plat @import("impl/x86.zig");
     } else if (builtin.cpu.arch.isArm()) {
         const target = switch (builtin.cpu.arch) {
-            .arm, .armeb => std.Target.arm,
-            _ => std.Target.aarch64,
+            .aarch64, .aarch64_be => std.Target.aarch64,
+            _ => std.Target.arm,
         };
 
         const has_aes = target.featureSetHas(builtin.cpu.features, .aes);
         const has_neon = target.featureSetHas(builtin.cpu.features, .neon);
 
-        if (has_aes and has_neon) break :plat @import("aes/arm.zig");
+        if (has_aes and has_neon) break :plat @import("impl/arm.zig");
     }
 
-    break :plat @import("aes/soft.zig");
+    break :plat @import("impl/soft.zig");
 };
 
 pub const software_aes = @hasDecl(aes, "software");
-pub const aesEncrypt = aes.encrypt;
-pub const aesEncryptLast = aes.encryptLast;
+const aesEncrypt = aes.encrypt;
+const aesEncryptLast = aes.encryptLast;
 
 const has_asm = @hasDecl(aes, "assembly");
 
@@ -60,13 +60,12 @@ pub inline fn hash(input: []const u8, seed: u64) u128 {
         finalize(aesEncrypt(compressAll(input), @bitCast(@as(u64x2, @splat(seed)))));
 }
 
-// SOFTWARE AES IMPLEMENTATION
+// NON-ASSEMBLY IMPLEMENTATION
 
-pub const i8x16 = @Vector(16, i8);
-pub const u8x16 = @Vector(16, u8);
-pub const i32x4 = @Vector(4, i32);
-pub const u32x4 = @Vector(4, u32);
-pub const u64x2 = @Vector(2, u64);
+const i8x16 = @Vector(16, i8);
+const i32x4 = @Vector(4, i32);
+const u32x4 = @Vector(4, u32);
+const u64x2 = @Vector(2, u64);
 
 // get partial
 
