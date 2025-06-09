@@ -2,7 +2,7 @@ const std = @import("std");
 const gxhash = @import("gxhash");
 
 inline fn hash32(input: []const u8, seed: u64) u32 {
-    return @truncate(gxhash.hash(input, seed));
+    return @truncate(gxhash.hash(seed, input));
 }
 
 test "all blocks are consumed" {

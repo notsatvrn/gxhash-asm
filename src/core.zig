@@ -53,7 +53,7 @@ pub const finalize = if (has_asm) finalize_fast else finalizeSoft;
 extern fn finalize_fast(vec: i8x16) u128;
 
 extern fn hash_fast(ptr: u64, len: u64, seed: u64) i8x16;
-pub inline fn hash(input: []const u8, seed: u64) u128 {
+pub inline fn hash(seed: u64, input: []const u8) u128 {
     return if (comptime has_asm)
         @bitCast(hash_fast(@intFromPtr(input.ptr), input.len, seed))
     else
