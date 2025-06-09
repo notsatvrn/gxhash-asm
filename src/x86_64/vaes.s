@@ -155,57 +155,47 @@ post_unrollable:
 
 compress8prep:
   # xmm1, 3-4 reserved
-  # tmp registers: xmm0 and xmm14
+  # tmp register: ymm5
 
-  # disambiguation vectors
-  pxor xmm2, xmm2
-  pxor xmm5, xmm5
-  # lanes
-  movdqa xmm8, xmm0
-  movdqa xmm9, xmm0
+  # disambiguation vector
+  pxor ymm2, ymm2
+  # load 256-bit lane and keys
+  vinserti128 ymm0, ymm0, xmm0, 1
+  vinserti128 ymm3, ymm3, xmm4, 1
   # move address into RAX (smaller opcode)
   mov rax, rdi
   cmp rax, rbx
   je post_compress8
 compress8:
   # load into tmp registers
-  movdqu xmm0, [rax]
-  movdqu xmm14, [rax + 16]
-  movdqu xmm6, [rax + 32]
-  movdqu xmm7, [rax + 48]
-  movdqu xmm10, [rax + 64]
-  movdqu xmm11, [rax + 80]
-  movdqu xmm12, [rax + 96]
-  movdqu xmm13, [rax + 112]
+  movdqu ymm5, [rax]
+  movdqu ymm6, [rax + 32]
+  movdqu ymm7, [rax + 64]
+  movdqu ymm8, [rax + 96]
   # compress
-  aesenc xmm0, xmm6
-  aesenc xmm14, xmm7
-  aesenc xmm0, xmm10
-  aesenc xmm14, xmm11
-  aesenc xmm0, xmm12
-  aesenc xmm14, xmm13
-  # add keys to disambiguation vectors
-  paddb xmm2, xmm3
-  paddb xmm5, xmm4
-  # encrypt tmp registers using those vectors as keys
-  aesenc xmm0, xmm2
-  aesenc xmm14, xmm5
+  aesenc ymm5, ymm6
+  aesenc ymm5, ymm7
+  aesenc ymm5, ymm8
+  # add keys to disambiguation vector
+  paddb ymm2, ymm3
+  # encrypt tmp registers using that vector as keys
+  aesenc ymm5, ymm2
   # last encryption with lanes as keys
-  vaesenclast xmm8, xmm0, xmm8
-  vaesenclast xmm9, xmm14, xmm9
+  vaesenclast ymm0, ymm5, ymm0
   # loop
   add rax, 128
   cmp rax, rbx
   jb compress8
 post_compress8:
-  # splat len in xmm0
-  movd xmm0, esi
-  pshufd xmm0, xmm0, 0x00
-  # add len to lanes
-  paddb xmm9, xmm0
-  paddb xmm0, xmm8
+  # splat len in ymm5
+  movd xmm5, esi
+  pshufd ymm5, ymm5, 0x00
+  # add len to lane
+  paddb ymm0, ymm5
+  # unload upper lane
+  vextracti128 xmm5, ymm0, 1
   # merge lanes
-  aesenc xmm0, xmm9
+  aesenc xmm0, xmm5
 final:
   aesenc xmm1, xmm3
   aesenc xmm1, xmm4

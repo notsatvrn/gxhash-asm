@@ -1,18 +1,18 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-// AES implementation
+// IMPLEMENTATION
 
 const aes = plat: {
     if (builtin.cpu.arch.isX86()) {
         const has_aes = std.Target.x86.featureSetHas(builtin.cpu.features, .aes);
         const has_avx = has_aes and std.Target.x86.featureSetHas(builtin.cpu.features, .avx);
-        //const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
+        const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
 
-        //if (has_vaes and @import("options").hybrid) break :plat @import("aes/x86_vaes.zig");
+        if (has_vaes and @import("options").hybrid) break :plat @import("aes/x86_vaes.zig");
         if (has_avx) break :plat @import("aes/x86_avx.zig");
         if (has_aes) break :plat @import("aes/x86.zig");
-    } else if (builtin.cpu.arch.isARM()) {
+    } else if (builtin.cpu.arch.isArm()) {
         const target = switch (builtin.cpu.arch) {
             .arm, .armeb => std.Target.arm,
             _ => std.Target.aarch64,
@@ -32,15 +32,14 @@ pub const aesEncrypt = aes.encrypt;
 pub const aesEncryptLast = aes.encryptLast;
 
 const has_asm = @hasDecl(aes, "assembly");
-const assembly = if (has_asm)
-    aes.assembly
-else
-    \\hash_fast:
-    \\compress_all:
-;
 
 comptime {
-    asm (assembly);
+    asm (if (has_asm)
+            aes.assembly
+        else
+            \\hash_fast:
+            \\compress_all:
+    );
 }
 
 extern fn hash_fast(ptr: u64, len: u64, seed: u64) i8x16;
@@ -63,7 +62,7 @@ pub inline fn compressAll(input: []const u8) i8x16 {
     return if (comptime has_asm) caFast(input) else caSoft(input);
 }
 
-// states
+// SOFTWARE AES IMPLEMENTATION
 
 pub const i8x16 = @Vector(16, i8);
 pub const u8x16 = @Vector(16, u8);
@@ -85,16 +84,19 @@ inline fn getPartialUnsafe(data: [*]const i8, len: usize) i8x16 {
     return @select(i8, len_vec > indices, data[0..16].*, @as(i8x16, @splat(0))) +% len_vec;
 }
 
-inline fn getPartial(data: [*]const i8, len: usize) i8x16 {
-    return if (check_same_page(data)) getPartialUnsafe(data, len) else getPartialSafe(data, len);
-}
-
 inline fn check_same_page(ptr: [*]const i8) bool {
     const address = @intFromPtr(ptr);
     // Mask to keep only the last 12 bits
     const offset_within_page = address & (std.heap.page_size_max - 1);
     // Check if the 16nd byte from the current offset exceeds the page boundary
     return offset_within_page < std.heap.page_size_max - 16;
+}
+
+inline fn getPartial(data: [*]const i8, len: usize) i8x16 {
+    return if (check_same_page(data))
+        getPartialUnsafe(data, len)
+    else
+        getPartialSafe(data, len);
 }
 
 // compression
@@ -169,12 +171,10 @@ inline fn compressMany(pointer: [*]const i8, end: usize, hash_vec: i8x16, len: u
 
     // Process the remaining n * 8 blocks
     // This part may use 128-bit or 256-bit
-    return compress8Standard(ptr, end, hash_vector, len);
+    return compress8(ptr, end, hash_vector, len);
 }
 
-//const compress8 = if (@hasDecl(aes, "compress8")) aes.compress8 else compress8Standard;
-
-inline fn compress8Standard(pointer: [*]const i8, end: usize, hash_vector: i8x16, len: usize) i8x16 {
+inline fn compress8(pointer: [*]const i8, end: usize, hash_vector: i8x16, len: usize) i8x16 {
     var ptr = pointer;
 
     // Disambiguation vectors
@@ -216,7 +216,7 @@ inline fn compress8Standard(pointer: [*]const i8, end: usize, hash_vector: i8x16
 
 // finalize
 
-pub inline fn finalize(data: i8x16) u128 {
+pub fn finalize(data: i8x16) u128 {
     var out = aesEncrypt(data, keys[0]);
     out = aesEncrypt(out, keys[1]);
     out = aesEncryptLast(out, keys[2]);
