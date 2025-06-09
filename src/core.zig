@@ -38,28 +38,26 @@ comptime {
             aes.assembly
         else
             \\hash_fast:
-            \\compress_all:
+            \\finalize_fast:
+            \\compress_all_fast:
     );
 }
 
+pub const compressAll = if (has_asm) compressAllFast else compressAllSoft;
+extern fn compress_all_fast(ptr: u64, len: u64) i8x16;
+inline fn compressAllFast(input: []const u8) i8x16 {
+    return compress_all_fast(@intFromPtr(input.ptr), @intCast(input.len));
+}
+
+pub const finalize = if (has_asm) finalize_fast else finalizeSoft;
+extern fn finalize_fast(vec: i8x16) u128;
+
 extern fn hash_fast(ptr: u64, len: u64, seed: u64) i8x16;
-extern fn compress_all(ptr: u64, len: u64) i8x16;
-
-inline fn hashFast(input: []const u8, seed: u64) i8x16 {
-    return hash_fast(@intFromPtr(input.ptr), @intCast(input.len), seed);
-}
-inline fn caFast(input: []const u8) i8x16 {
-    return compress_all(@intFromPtr(input.ptr), @intCast(input.len));
-}
-
 pub inline fn hash(input: []const u8, seed: u64) u128 {
     return if (comptime has_asm)
-        @bitCast(hashFast(input, seed))
+        @bitCast(hash_fast(@intFromPtr(input.ptr), input.len, seed))
     else
-        finalize(aesEncrypt(caSoft(input), @bitCast(@as(u64x2, @splat(seed)))));
-}
-pub inline fn compressAll(input: []const u8) i8x16 {
-    return if (comptime has_asm) caFast(input) else caSoft(input);
+        finalize(aesEncrypt(compressAll(input), @bitCast(@as(u64x2, @splat(seed)))));
 }
 
 // SOFTWARE AES IMPLEMENTATION
@@ -107,7 +105,7 @@ pub const keys: [3]i8x16 = .{
     @bitCast(u32x4{ 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B }),
 };
 
-fn caSoft(input: []const u8) i8x16 {
+fn compressAllSoft(input: []const u8) i8x16 {
     if (input.len == 0) return @splat(0);
 
     var ptr: [*]const i8 = @ptrCast(input.ptr);
@@ -216,7 +214,7 @@ inline fn compress8(pointer: [*]const i8, end: usize, hash_vector: i8x16, len: u
 
 // finalize
 
-pub fn finalize(data: i8x16) u128 {
+fn finalizeSoft(data: i8x16) u128 {
     var out = aesEncrypt(data, keys[0]);
     out = aesEncrypt(out, keys[1]);
     out = aesEncryptLast(out, keys[2]);

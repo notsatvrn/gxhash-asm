@@ -12,31 +12,31 @@ key3: .long 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B
 .text
 .global hash_fast
 .type hash_fast, @function
-.global finalize
-.type finalize, @function
+.global finalize_fast
+.type finalize_fast, @function
 
 # quickly hash bytes
 # rdi = address, rsi = length, rdx = seed | output in xmm0
 hash_fast:
   # compress all
-  call compress_all
+  call compress_all_fast
   # create seed in xmm1
   movq xmm1, rdx
   movlhps xmm1, xmm1
   # encrypt
   aesenc xmm0, xmm1
-finalize:
+finalize_fast:
   # finalize
   aesenc xmm0, [rip + key1]
   aesenc xmm0, [rip + key2]
   aesenclast xmm0, [rip + key3]
   ret
 
-.global compress_all
-.type compress_all, @function
+.global compress_all_fast
+.type compress_all_fast, @function
 
 # compress all bytes at address rdi with length rsi into a 128-bit vector
-compress_all:
+compress_all_fast:
   # fast path for len == 0
   mov rax, rsi
   test rax, rax
