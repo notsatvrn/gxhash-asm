@@ -6,11 +6,11 @@ const std = @import("std");
 const aes = plat: {
     if (builtin.cpu.arch.isX86()) {
         const has_aes = std.Target.x86.featureSetHas(builtin.cpu.features, .aes);
-        const has_avx = has_aes and std.Target.x86.featureSetHas(builtin.cpu.features, .avx);
-        const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
+        //const has_avx = has_aes and std.Target.x86.featureSetHas(builtin.cpu.features, .avx);
+        //const has_vaes = has_avx and std.Target.x86.featureSetHasAll(builtin.cpu.features, .{ .avx2, .vaes });
 
-        if (has_vaes and @import("options").hybrid) break :plat @import("impl/x86_vaes.zig");
-        if (has_avx) break :plat @import("impl/x86_avx.zig");
+        //if (has_vaes and @import("options").hybrid) break :plat @import("impl/x86_vaes.zig");
+        //if (has_avx) break :plat @import("impl/x86_avx.zig");
         if (has_aes) break :plat @import("impl/x86.zig");
     } else if (builtin.cpu.arch.isArm()) {
         const target = switch (builtin.cpu.arch) {
@@ -27,30 +27,15 @@ const aes = plat: {
     break :plat @import("impl/soft.zig");
 };
 
-pub const software_aes = @hasDecl(aes, "software");
+pub const software_aes = @hasDecl(aes, "software") and aes.software;
 const aesEncrypt = aes.encrypt;
 const aesEncryptLast = aes.encryptLast;
 
 const has_asm = @hasDecl(aes, "assembly");
 
 comptime {
-    asm (if (has_asm)
-            aes.assembly
-        else
-            \\hash_fast:
-            \\finalize_fast:
-            \\compress_all_fast:
-    );
+    asm (if (has_asm) aes.assembly else "hash_fast:");
 }
-
-pub const compressAll = if (has_asm) compressAllFast else compressAllSoft;
-extern fn compress_all_fast(ptr: u64, len: u64) i8x16;
-inline fn compressAllFast(input: []const u8) i8x16 {
-    return compress_all_fast(@intFromPtr(input.ptr), @intCast(input.len));
-}
-
-pub const finalize = if (has_asm) finalize_fast else finalizeSoft;
-extern fn finalize_fast(vec: i8x16) u128;
 
 extern fn hash_fast(ptr: u64, len: u64, seed: u64) i8x16;
 pub inline fn hash(seed: u64, input: []const u8) u128 {
@@ -104,7 +89,7 @@ pub const keys: [3]i8x16 = .{
     @bitCast(u32x4{ 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B }),
 };
 
-fn compressAllSoft(input: []const u8) i8x16 {
+fn compressAll(input: []const u8) i8x16 {
     if (input.len == 0) return @splat(0);
 
     var ptr: [*]const i8 = @ptrCast(input.ptr);
@@ -213,7 +198,7 @@ inline fn compress8(pointer: [*]const i8, end: usize, hash_vector: i8x16, len: u
 
 // finalize
 
-fn finalizeSoft(data: i8x16) u128 {
+fn finalize(data: i8x16) u128 {
     var out = aesEncrypt(data, keys[0]);
     out = aesEncrypt(out, keys[1]);
     out = aesEncryptLast(out, keys[2]);

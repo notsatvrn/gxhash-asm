@@ -2,7 +2,7 @@
 
 .rodata
 .p2align 4
-# constant for get_partial_unsafe indices
+# constant for get partial unsafe indices
 indices: .byte 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
 # keys
 key1: .long 0xF2784542, 0xB09D3E21, 0x89C222E5, 0xFC3BC28E
@@ -12,35 +12,30 @@ key3: .long 0xD0012E32, 0x689D2B7D, 0x5544B1B7, 0xC78B122B
 .text
 .global hash_fast
 .type hash_fast, @function
-.global finalize_fast
-.type finalize_fast, @function
 
-# quickly hash bytes
-# rdi = address, rsi = length, rdx = seed | output in xmm0
-hash_fast:
-  # compress all
-  call compress_all_fast
+.macro final
   # create seed in xmm1
   movq xmm1, rdx
   movlhps xmm1, xmm1
   # encrypt
   aesenc xmm0, xmm1
-finalize_fast:
   # finalize
-  aesenc xmm0, [rip + key1]
-  aesenc xmm0, [rip + key2]
+  aesenc xmm0, xmm3
+  aesenc xmm0, xmm4
   aesenclast xmm0, [rip + key3]
   ret
+.endm
 
-.global compress_all_fast
-.type compress_all_fast, @function
-
-# compress all bytes at address rdi with length rsi into a 128-bit vector
-compress_all_fast:
+# quickly hash bytes
+# rdi = address, rsi = length, rdx = seed | output in xmm0
+hash_fast:
   # fast path for len == 0
   mov rax, rsi
   test rax, rax
   je ret0
+  # load keys
+  movdqa xmm3, [rip + key1]
+  movdqa xmm4, [rip + key2]
   # some other hot paths
   cmp rax, 16
   jb get_partial
@@ -48,14 +43,18 @@ compress_all_fast:
 
   # fast path for len == 16
 
-  movdqu xmm0, [rdi]
-  # splat len into xmm1
-  movd xmm1, esi
   pxor xmm2, xmm2
+  movdqu xmm0, [rdi]
+  # splat len
+  movd xmm1, esi
   pshufb xmm1, xmm2
   # add len
   paddb xmm0, xmm1
-  ret
+early_final:
+  final
+ret0:
+  pxor xmm0, xmm0
+  jmp early_final
 over_16:
   # store initial address
   push rbx
@@ -65,13 +64,12 @@ over_16:
   je extra0
   
   # extra bytes was not 0 (get partial unsafe)
-  # keep in sync with below implementation!
   
   # splat len
   movd xmm1, eax
   pxor xmm2, xmm2
   pshufb xmm1, xmm2
-  # create indices mask in xmm0
+  # create indices mask
   movdqa xmm0, xmm1
   pcmpgtb xmm0, [rip + indices]
   # load vector, apply mask, add len
@@ -85,23 +83,20 @@ extra0:
   movdqu xmm0, [rdi]
   add rdi, 16
 extra_loaded:
-  # load keys
-  movdqa xmm3, [rip + key1]
-  movdqa xmm4, [rip + key2]
   # initial vector (xmm1)
   movdqu xmm1, [rdi]
   cmp rsi, 32
-  jbe final
+  jbe prefinal
   # fast path when input length > 32 and <= 48
   movdqu xmm2, [rdi + 16]
   aesenc xmm1, xmm2
   cmp rsi, 48
-  jbe final
+  jbe prefinal
   # fast path when input length > 48 and <= 64
   movdqu xmm2, [rdi + 32]
   aesenc xmm1, xmm2
   cmp rsi, 64
-  jbe final
+  jbe prefinal
 
   # compress many (length > 32)
 
@@ -113,8 +108,7 @@ extra_loaded:
   sub rax, rdi
   and rax, 127
   # jump to block compression if nothing unrollable
-  cmp al, 0
-  je compress8prep
+  jz compress8prep
 
   # unrollable compression
 
@@ -169,7 +163,6 @@ compress8prep:
   cmp rax, rbx
   je post_compress8
 compress8:
-  # load into tmp registers
   movdqu xmm0, [rax]
   movdqu xmm14, [rax + 16]
   movdqu xmm6, [rax + 32]
@@ -178,9 +171,6 @@ compress8:
   movdqu xmm11, [rax + 80]
   movdqu xmm12, [rax + 96]
   movdqu xmm13, [rax + 112]
-  # prefetch the next chunk
-  prefetcht0 [rax + 128]
-  # compress
   aesenc xmm0, xmm6
   aesenc xmm14, xmm7
   aesenc xmm0, xmm10
@@ -211,23 +201,19 @@ post_compress8:
   paddb xmm0, xmm8
   # merge lanes
   aesenc xmm0, xmm9
-final:
+prefinal:
   aesenc xmm1, xmm3
   aesenc xmm1, xmm4
   aesenclast xmm0, xmm1
   pop rbx
-return:
-  ret
-ret0:
-  pxor xmm0, xmm0
-  ret
+  final
 
 # partially load a vector (SAFE | copies if all 16 bytes don't fit into one page)
 # rdi = address, rsi = length | uses xmm0-2, output in xmm0
 get_partial:
-  pxor xmm2, xmm2
-  # splat len into xmm0
+  # splat len
   movd xmm0, esi
+  pxor xmm2, xmm2
   pshufb xmm0, xmm2
   # check if all 16 bytes are on the same page
   mov ax, di
@@ -236,15 +222,16 @@ get_partial:
   # jump to safe version if not
   jae get_partial_safe
 get_partial_unsafe:
-  # create indices mask in xmm0
+  # load vector
+  movdqu xmm2, [rdi]
+  # create indices mask
   movdqa xmm1, xmm0
   pcmpgtb xmm0, [rip + indices]
-  # load vector w/ mask, add len
-  movdqu xmm2, [rdi] # may SIGSEGV!
+  # apply mask, add len
   pand xmm0, xmm2
   paddb xmm0, xmm1
-  # cleanup
-  ret
+get_partial_final:
+  final
 get_partial_safe:
   # align stack
   push rbp
@@ -259,4 +246,4 @@ get_partial_safe:
   paddb xmm0, [rsp]
   # cleanup
   leave
-  ret
+  jmp get_partial_final

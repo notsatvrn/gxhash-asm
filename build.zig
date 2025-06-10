@@ -19,6 +19,24 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "options", .module = options_module }},
     });
 
+    // BENCHMARKING
+
+    const exe = b.addExecutable(.{
+        .name = "gxhash-bench",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe.root_module.addImport("gxhash", gxhash);
+
+    b.installArtifact(exe);
+
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    const run_step = b.step("run", "Run the app");
+    run_step.dependOn(&run_cmd.step);
+
     // TESTS
 
     const tests = b.addTest(.{
